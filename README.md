@@ -12,7 +12,7 @@ Questa è un'applicazione web costruita con Streamlit che permette di scaricare 
 ## Compatibilità
 
 > [!IMPORTANT]
-> **Ottimizzato per Novelfull**: L'applicazione è stata sviluppata e testata principalmente per funzionare con il sito **Novelfull** (e siti con struttura simile).
+> **Ottimizzato per Novelfull.net**: L'applicazione è stata sviluppata e testata principalmente per funzionare con il sito **Novelfull.net** (e siti con struttura simile).
 >
 > ⚠️ **Nota per altri siti**: Sebbene l'app tenti di adattarsi a diverse strutture HTML, il funzionamento su siti diversi da Novelfull **non è garantito** e potrebbe richiedere adattamenti specifici.
 

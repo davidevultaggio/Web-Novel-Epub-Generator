@@ -72,7 +72,7 @@ def get_chapters(url):
 
     return chapters, novel_title
 
-def download_chapter_content(url):
+def download_chapter_content(url, chapter_title=None):
     """
     Downloads and cleans chapter content.
     """
@@ -113,6 +113,18 @@ def download_chapter_content(url):
                 if 'prev chapter' in text or 'next chapter' in text:
                     p.decompose()
 
+            # Remove the first element if it's the title
+            if chapter_title:
+                # Find the first significant text element
+                first_element = content_div.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'div'])
+                if first_element:
+                    first_text = first_element.get_text(strip=True).lower()
+                    clean_title = chapter_title.strip().lower()
+                    
+                    # Check if the title is contained in the first element or vice versa
+                    if clean_title in first_text or (len(first_text) > 5 and first_text in clean_title):
+                        first_element.decompose()
+
             return str(content_div)
             
     except Exception as e:
@@ -137,7 +149,7 @@ def create_epub(title, chapters_data, progress_bar):
         chap_title = chapter_info['Title']
         chap_url = chapter_info['URL']
         
-        content = download_chapter_content(chap_url)
+        content = download_chapter_content(chap_url, chap_title)
         
         c = epub.EpubHtml(title=chap_title, file_name=f'chap_{i+1}.xhtml', lang='en')
         c.content = f'<h1>{chap_title}</h1>{content}'
