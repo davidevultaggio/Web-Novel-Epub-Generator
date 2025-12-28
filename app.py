@@ -24,7 +24,7 @@ def get_chapters(url):
         response.raise_for_status()
     except requests.exceptions.RequestException as e:
         st.error(f"Error fetching URL: {e}")
-        return []
+        return [], ""
 
     soup = BeautifulSoup(response.content, 'html.parser')
     
