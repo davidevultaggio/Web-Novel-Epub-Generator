@@ -114,16 +114,11 @@ def download_chapter_content(url, chapter_title=None):
                     p.decompose()
 
             # Remove the first element if it's the title
-            if chapter_title:
-                # Find the first significant text element
-                first_element = content_div.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'div'])
-                if first_element:
-                    first_text = first_element.get_text(strip=True).lower()
-                    clean_title = chapter_title.strip().lower()
-                    
-                    # Check if the title is contained in the first element or vice versa
-                    if clean_title in first_text or (len(first_text) > 5 and first_text in clean_title):
-                        first_element.decompose()
+            # Remove the first element a priori (user request)
+            # focusing on headers and paragraphs to avoid deleting wrapper divs
+            first_element = content_div.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p'])
+            if first_element:
+                first_element.decompose()
 
             return str(content_div)
             
