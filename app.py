@@ -67,9 +67,28 @@ def get_chapters(url):
                             chapters.append({'Title': title, 'URL': href})
 
     novel_title = "Web Novel"
-    if soup.title:
-        novel_title = soup.title.get_text(strip=True).split('|')[0].strip()
+    
+    # Try to extract title from URL first for a cleaner name
+    try:
+        from urllib.parse import urlparse
+        import os
+        
+        path = urlparse(url).path
+        filename = os.path.basename(path) # e.g., a-will-eternal.html
+        slug = os.path.splitext(filename)[0] # a-will-eternal
+        
+        if slug and slug != "index": # Avoid 'index' if it's the root
+            clean_title = slug.replace('-', ' ').title()
+            if len(clean_title) > 3: # Basic sanity check
+                novel_title = clean_title
+    except Exception as e:
+        print(f"Error parsing URL for title: {e}")
 
+    # Fallback/Override if URL extraction results in default or we prefer soup.title in some cases?
+    # Actually, user prefers URL title. But if URL fails, we use soup.title.
+    if novel_title == "Web Novel" and soup.title:
+         novel_title = soup.title.get_text(strip=True).split('|')[0].strip()
+    
     return chapters, novel_title
 
 def download_chapter_content(url, chapter_title=None):
@@ -239,20 +258,43 @@ if st.session_state["chapters"]:
     df.index = df.index + 1
     st.dataframe(df)
     
-    custom_title = st.text_input("Nome del file ePub", value=title)
+    # Logic to determine start and end chapters for the filename
+    start_chapter = 1
+    end_chapter = len(chapters_data)
     
+    # Try to parse numbers from the first and last chapter titles
+    def extract_chapter_number(title):
+        import re
+        match = re.search(r'Chapter\s+(\d+)', title, re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+        return None
+
+    first_chap_num = extract_chapter_number(chapters_data[0]['Title'])
+    last_chap_num = extract_chapter_number(chapters_data[-1]['Title'])
+
+    if first_chap_num is not None and last_chap_num is not None:
+        file_range_str = f" {first_chap_num}-{last_chap_num}"
+    else:
+        # Fallback if parsing fails
+        file_range_str = f" {start_chapter}-{end_chapter}"
+
+    auto_filename = f"{title}{file_range_str}"
+    
+    # st.info removed as per user request
+
     if st.button("Scarica e Converti in ePub"):
         progress_bar = st.progress(0, text="Starting download...")
         
         try:
-            epub_buffer = create_epub(custom_title, chapters_data, progress_bar)
+            epub_buffer = create_epub(auto_filename, chapters_data, progress_bar)
             progress_bar.empty()
             st.success("Conversion complete!")
             
             st.download_button(
                 label="Download ePub",
                 data=epub_buffer,
-                file_name=f"{custom_title}.epub",
+                file_name=f"{auto_filename}.epub",
                 mime="application/epub+zip"
             )
         except Exception as e:
