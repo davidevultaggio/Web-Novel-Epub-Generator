@@ -114,11 +114,39 @@ def download_chapter_content(url, chapter_title=None):
                     p.decompose()
 
             # Remove the first element if it's the title
-            # Remove the first element a priori (user request)
-            # focusing on headers and paragraphs to avoid deleting wrapper divs
-            first_element = content_div.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p'])
-            if first_element:
-                first_element.decompose()
+            # Refined removal logic:
+            # 1. Strip leading empty elements
+            # 2. Check for "Chapter X" patterns or fuzzy title matches
+            # 3. Repeat until real content is found
+            
+            # Helper to check if text looks like a header/title
+            def is_header_text(text, title):
+                text = text.lower().strip()
+                title = title.lower().strip()
+                if not text: return True # Treat empty as "header to remove" to get to next
+                
+                # Check 1: Exact or fuzzy title match
+                if title in text or (len(text) > 5 and text in title):
+                    return True
+                
+                # Check 2: "Chapter N" pattern
+                # Matches: "Chapter 1", "Chapter 1: Title", "Chapter 1 - Title"
+                if re.match(r'^chapter\s+\d+', text):
+                    return True
+                    
+                return False
+
+            # Search in the first few elements (let's say top 5 to be safe)
+            for _ in range(5):
+                first_element = content_div.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'div'])
+                if not first_element:
+                    break
+                    
+                text = first_element.get_text(strip=True)
+                if is_header_text(text, chapter_title if chapter_title else ""):
+                    first_element.decompose()
+                else:
+                    break
 
             return str(content_div)
             
