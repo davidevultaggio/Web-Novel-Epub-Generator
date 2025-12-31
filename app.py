@@ -56,6 +56,21 @@ def get_chapters(url, status_callback=None):
     if novel_title == "Web Novel" and soup.title:
          novel_title = soup.title.get_text(strip=True).split('|')[0].strip()
 
+    # Extract Cover Image
+    cover_url = ""
+    try:
+        # Search for typical cover containers
+        cover_div = soup.find('div', class_=lambda c: c and any(x in c for x in ['book', 'book-img', 'image', 'thumb']))
+        if cover_div:
+            img_tag = cover_div.find('img')
+            if img_tag and img_tag.get('src'):
+                cover_url = img_tag.get('src')
+                # Handle relative URLs
+                if not cover_url.startswith('http'):
+                     cover_url = urljoin(url, cover_url)
+    except Exception as e:
+        print(f"Error extracting cover: {e}")
+
     # 2. Function to extract chapters from a soup object
     def extract_from_soup(current_soup, base_url):
         chapters = []
@@ -165,7 +180,7 @@ def get_chapters(url, status_callback=None):
                  print(f"Error on page {p}: {e}")
                  # Continue to next page
 
-    return all_chapters, novel_title
+    return all_chapters, novel_title, cover_url
 
 def download_chapter_content(url, chapter_title=None):
     """
@@ -251,7 +266,7 @@ def download_chapter_content(url, chapter_title=None):
     
     return "<p>Content not found</p>"
 
-def create_epub(title, chapters_data, progress_bar):
+def create_epub(title, chapters_data, progress_bar, cover_url=None):
     book = epub.EpubBook()
     book.set_identifier(f'id_{int(time.time())}')
     book.set_title(title)
@@ -259,6 +274,19 @@ def create_epub(title, chapters_data, progress_bar):
     
     book.add_author('Unknown') # Could extract author if needed
     
+    # Add Cover if available
+    if cover_url:
+        try:
+            # Add headers for cover request
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            resp = requests.get(cover_url, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                book.set_cover("cover.jpg", resp.content)
+        except Exception as e:
+            print(f"Could not add cover: {e}")
+
     epub_chapters = []
     
     total_chapters = len(chapters_data)
@@ -312,6 +340,8 @@ if "chapters" not in st.session_state:
     st.session_state["chapters"] = []
 if "novel_title" not in st.session_state:
     st.session_state["novel_title"] = ""
+if "cover_url" not in st.session_state:
+    st.session_state["cover_url"] = ""
 
 if analyze_button and url_input:
     # Use a container for status updates
@@ -320,11 +350,12 @@ if analyze_button and url_input:
     def update_status(msg):
         status_text.text(msg)
         
-    chapters_data, title = get_chapters(url_input, status_callback=update_status)
+    chapters_data, title, cover_url = get_chapters(url_input, status_callback=update_status)
         
     if chapters_data:
         st.session_state["chapters"] = chapters_data
         st.session_state["novel_title"] = title
+        st.session_state["cover_url"] = cover_url
         status_text.empty() # Clear status
 
     else:
@@ -396,7 +427,8 @@ if st.session_state["chapters"]:
         progress_bar = st.progress(0, text="Starting download...")
         
         try:
-            epub_buffer = create_epub(auto_filename, selected_chapters, progress_bar)
+            cover_url = st.session_state.get("cover_url", None)
+            epub_buffer = create_epub(auto_filename, selected_chapters, progress_bar, cover_url)
             progress_bar.empty()
             st.success("Conversion complete!")
             
