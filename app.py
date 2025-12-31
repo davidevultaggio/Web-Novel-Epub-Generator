@@ -7,89 +7,165 @@ import random
 from io import BytesIO
 from ebooklib import epub
 import re
+from urllib.parse import urlparse, urljoin, parse_qs, urlencode, urlunparse
 
 # Set page configuration
 st.set_page_config(page_title="Web Novel Downloader", page_icon="📚")
 
-def get_chapters(url):
+def get_session():
+    return requests.Session()
+
+def get_chapters(url, status_callback=None):
     """
-    Fetches the URL and extracts chapter links.
+    Fetches the URL and extracts chapter links from all pages if pagination exists.
     """
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
     
+    session = get_session()
+    all_chapters = []
+    novel_title = "Web Novel"
+    
+    # 1. Fetch First Page
+    if status_callback:
+        status_callback("Fetching first page...")
+        
     try:
-        response = requests.get(url, headers=headers)
+        response = session.get(url, headers=headers)
         response.raise_for_status()
-    except requests.exceptions.RequestException as e:
+        soup = BeautifulSoup(response.content, 'html.parser')
+    except Exception as e:
         st.error(f"Error fetching URL: {e}")
         return [], ""
 
-    soup = BeautifulSoup(response.content, 'html.parser')
-    
-    chapters = []
-    
-    # Refined search: priority to specific ID 'list-chapter' which contains the full list
-    # This avoids "Latest Chapters" section which is usually separate
-    main_list = soup.find(id='list-chapter')
-    
-    if main_list:
-        links = main_list.find_all('a')
-        for link in links:
-            title = link.get_text(strip=True)
-            href = link.get('href')
-            if href and title:
-                # Filter out pagination links
-                if title.isdigit() or title in ['Next', 'Prev', 'First', 'Last', 'Select page', '<', '>'] or any(x in title for x in ['<<', '>>', '»', '«']):
-                    continue
-                    
-                if not href.startswith('javascript'):
-                    if not href.startswith('http'):
-                        from urllib.parse import urljoin
-                        href = urljoin(url, href)
-                    chapters.append({'Title': title, 'URL': href})
-    else:
-        # Fallback: Generic search for chapter lists if specific ID is missing
-        potential_containers = soup.find_all(['ul', 'div'], class_=lambda c: c and any(x in c for x in ['list-chapter', 'chapter-list', 'chapters']))
-        
-        if potential_containers:
-            for container in potential_containers:
-                links = container.find_all('a')
-                for link in links:
-                    title = link.get_text(strip=True)
-                    href = link.get('href')
-                    if href and title:
-                        if not href.startswith('javascript'):
-                            if not href.startswith('http'):
-                                from urllib.parse import urljoin
-                                href = urljoin(url, href)
-                            chapters.append({'Title': title, 'URL': href})
-
-    novel_title = "Web Novel"
-    
+    # Extract Title (Logic moved here using soup from first page)
     # Try to extract title from URL first for a cleaner name
     try:
-        from urllib.parse import urlparse
-        import os
-        
         path = urlparse(url).path
-        filename = os.path.basename(path) # e.g., a-will-eternal.html
-        slug = os.path.splitext(filename)[0] # a-will-eternal
+        filename = path.split('/')[-1] # e.g., a-will-eternal.html
+        slug = filename.rsplit('.', 1)[0] # a-will-eternal
         
-        if slug and slug != "index": # Avoid 'index' if it's the root
+        if slug and slug != "index": 
             clean_title = slug.replace('-', ' ').title()
-            if len(clean_title) > 3: # Basic sanity check
+            if len(clean_title) > 3:
                 novel_title = clean_title
     except Exception as e:
         print(f"Error parsing URL for title: {e}")
 
-    # Fallback/Override if URL extraction results in default or we prefer soup.title in some cases?
-    # Actually, user prefers URL title. But if URL fails, we use soup.title.
     if novel_title == "Web Novel" and soup.title:
          novel_title = soup.title.get_text(strip=True).split('|')[0].strip()
+
+    # 2. Function to extract chapters from a soup object
+    def extract_from_soup(current_soup, base_url):
+        chapters = []
+        # Refined search: priority to specific ID 'list-chapter'
+        main_list = current_soup.find(id='list-chapter')
+        if main_list:
+            links = main_list.find_all('a')
+            for link in links:
+                title = link.get_text(strip=True)
+                href = link.get('href')
+                if href and title:
+                    # Filter out pagination links
+                    if title.isdigit() or title in ['Next', 'Prev', 'First', 'Last', 'Select page', '<', '>'] or any(x in title for x in ['<<', '>>', '»', '«']):
+                        continue
+                    if not href.startswith('javascript'):
+                        if not href.startswith('http'):
+                            href = urljoin(base_url, href)
+                        chapters.append({'Title': title, 'URL': href})
+        else:
+             # Fallback
+            potential_containers = current_soup.find_all(['ul', 'div'], class_=lambda c: c and any(x in c for x in ['list-chapter', 'chapter-list', 'chapters']))
+            if potential_containers:
+                for container in potential_containers:
+                    links = container.find_all('a')
+                    for link in links:
+                        title = link.get_text(strip=True)
+                        href = link.get('href')
+                        if href and title:
+                            if not href.startswith('javascript'):
+                                if not href.startswith('http'):
+                                    href = urljoin(base_url, href)
+                                chapters.append({'Title': title, 'URL': href})
+        return chapters
+
+    # Extract from first page
+    all_chapters.extend(extract_from_soup(soup, url))
     
-    return chapters, novel_title
+    # 3. Pagination Logic
+    last_page = 1
+    pagination = soup.find('ul', class_='pagination') or soup.find(class_='pagination')
+    
+    if pagination:
+        # Find all page numbers
+        links = pagination.find_all('a')
+        for link in links:
+            text = link.get_text(strip=True)
+            href = link.get('href')
+            
+            # Check for "Last"
+            if 'Last' in text:
+                # Try to extract page number from href (e.g. ?page=20 or page-20.html)
+                # Helper: parse page param
+                def get_page_num(url_str):
+                    if not url_str: return 0
+                    parsed = urlparse(url_str)
+                    qs = parse_qs(parsed.query)
+                    if 'page' in qs:
+                        return int(qs['page'][0])
+                    return 0
+                
+                num = get_page_num(href)
+                if num > last_page:
+                    last_page = num
+            elif text.isdigit():
+                num = int(text)
+                if num > last_page:
+                    last_page = num
+    
+    if last_page > 1:
+        if status_callback:
+            status_callback(f"Found {last_page} pages. Starting deep analysis...")
+        
+        # Determine base URL for pagination
+        # NovelFull standard: ?page=X
+        # We will append ?page=X to the user provided URL (or update it)
+        
+        parsed_url = urlparse(url)
+        
+        for p in range(2, last_page + 1):
+             if status_callback:
+                status_callback(f"Analyzing page {p}/{last_page}...")
+             
+             # Construct URL
+             # If query params exist, append or replace page
+             query = parse_qs(parsed_url.query)
+             query['page'] = [str(p)]
+             new_query = urlencode(query, doseq=True)
+             page_url = urlunparse((parsed_url.scheme, parsed_url.netloc, parsed_url.path, parsed_url.params, new_query, parsed_url.fragment))
+             
+             try:
+                 resp = session.get(page_url, headers=headers)
+                 if resp.status_code == 200:
+                     page_soup = BeautifulSoup(resp.content, 'html.parser')
+                     new_chapters = extract_from_soup(page_soup, page_url)
+                     
+                     # Avoid duplicates if any
+                     # (Simple check by URL)
+                     existing_urls = set(c['URL'] for c in all_chapters)
+                     for ch in new_chapters:
+                         if ch['URL'] not in existing_urls:
+                             all_chapters.append(ch)
+                 
+                 # Be polite
+                 time.sleep(random.uniform(0.3, 0.7))
+                 
+             except Exception as e:
+                 print(f"Error on page {p}: {e}")
+                 # Continue to next page
+
+    return all_chapters, novel_title
 
 def download_chapter_content(url, chapter_title=None):
     """
@@ -238,55 +314,94 @@ if "novel_title" not in st.session_state:
     st.session_state["novel_title"] = ""
 
 if analyze_button and url_input:
-    with st.spinner("Analyzing..."):
-        chapters_data, title = get_chapters(url_input)
+    # Use a container for status updates
+    status_text = st.empty()
+    
+    def update_status(msg):
+        status_text.text(msg)
         
-        if chapters_data:
-            st.session_state["chapters"] = chapters_data
-            st.session_state["novel_title"] = title
-            st.success(f"Found {len(chapters_data)} chapters for '{title}'!")
-        else:
-            st.warning("No chapters found. Please check the URL or the site structure.")
+    chapters_data, title = get_chapters(url_input, status_callback=update_status)
+        
+    if chapters_data:
+        st.session_state["chapters"] = chapters_data
+        st.session_state["novel_title"] = title
+        status_text.empty() # Clear status
+        st.success(f"Found {len(chapters_data)} chapters for '{title}'!")
+    else:
+        status_text.empty()
+        st.warning("No chapters found. Please check the URL or the site structure.")
 
 if st.session_state["chapters"]:
     chapters_data = st.session_state["chapters"]
     title = st.session_state["novel_title"]
-
-    # Logic to determine start and end chapters for the filename
-    start_chapter = 1
-    end_chapter = len(chapters_data)
     
-    # Try to parse numbers from the first and last chapter titles
-    def extract_chapter_number(title):
-        import re
-        match = re.search(r'Chapter\s+(\d+)', title, re.IGNORECASE)
-        if match:
-            return int(match.group(1))
-        return None
+    st.divider()
+    st.subheader("Selection & Download")
+    
+    total_found = len(chapters_data)
+    st.write(f"Total chapters found: **{total_found}**")
 
-    first_chap_num = extract_chapter_number(chapters_data[0]['Title'])
-    last_chap_num = extract_chapter_number(chapters_data[-1]['Title'])
+    # Range Selection
+    col1, col2 = st.columns(2)
+    with col1:
+        start_idx = st.number_input("From Chapter", min_value=1, max_value=total_found, value=1)
+    with col2:
+        end_idx = st.number_input("To Chapter", min_value=1, max_value=total_found, value=total_found)
 
-    if first_chap_num is not None and last_chap_num is not None:
-        file_range_str = f" {first_chap_num}-{last_chap_num}"
+    # Validate range
+    if start_idx > end_idx:
+        st.error("Start chapter cannot be greater than end chapter.")
+        valid_range = False
     else:
-        # Fallback if parsing fails
-        file_range_str = f" {start_chapter}-{end_chapter}"
-
-    auto_filename = f"{title}{file_range_str}"
+        valid_range = True
+        
+    start_chapter_num = int(start_idx)
+    end_chapter_num = int(end_idx)
     
-    # st.info removed as per user request
+    # Adjust list slicing (0-based)
+    # User selects 1 to N
+    # Slice is [0 : N] ? No, [0] is 1st. 
+    # [start_idx-1 : end_idx]
+    selected_chapters = chapters_data[start_chapter_num-1 : end_chapter_num]
+    
+    count_to_download = len(selected_chapters)
+    
+    auto_filename = f"{title}"
+    
+    if selected_chapters:
+        # Auto-filename generation based on selection
+        # Try to parse numbers from the actual First and Last selected chapter titles
+        def extract_chapter_number(title):
+            match = re.search(r'Chapter\s+(\d+)', title, re.IGNORECASE)
+            if match:
+                return int(match.group(1))
+            return None
 
-    if st.button("Scarica e Converti in ePub"):
+        first_chap_title = selected_chapters[0]['Title']
+        last_chap_title = selected_chapters[-1]['Title']
+        
+        first_num = extract_chapter_number(first_chap_title)
+        last_num = extract_chapter_number(last_chap_title)
+        
+        if first_num is not None and last_num is not None:
+             range_str = f" {first_num}-{last_num}"
+        else:
+             range_str = f" {start_idx}-{end_idx}" # Fallback to index
+             
+        auto_filename = f"{title}{range_str}"
+
+    st.info(f"Ready to download {count_to_download} chapters.")
+
+    if st.button("Scarica e Converti in ePub" if valid_range else "Invalid Range", disabled=not valid_range):
         progress_bar = st.progress(0, text="Starting download...")
         
         try:
-            epub_buffer = create_epub(auto_filename, chapters_data, progress_bar)
+            epub_buffer = create_epub(auto_filename, selected_chapters, progress_bar)
             progress_bar.empty()
             st.success("Conversion complete!")
             
             st.download_button(
-                label="Download ePub",
+                label=f"Download {auto_filename}.epub",
                 data=epub_buffer,
                 file_name=f"{auto_filename}.epub",
                 mime="application/epub+zip"
