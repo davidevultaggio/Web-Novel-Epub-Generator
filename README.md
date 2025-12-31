@@ -1,47 +1,47 @@
 # Web Novel ePub Generator 📚
 
-Questa è un'applicazione web costruita con Streamlit che permette di scaricare web novel e convertirle automaticamente in formato ePub.
+This is a web application built with Streamlit that allows you to download web novels and automatically convert them into ePub format.
 
-## Funzionalità
+## Features
 
-- **Analisi URL**: Estrae automaticamente la lista dei capitoli dalla pagina indice di una novel.
-- **Download Intelligente**: Scarica il contenuto pulito di ogni capitolo, rimuovendo pubblicità e script non necessari.
-- **Conversione ePub**: Compila tutti i capitoli scaricati in un unico file ePub pronto per la lettura.
-- **Interfaccia Semplice**: Facile da usare grazie all'interfaccia intuitiva.
+- **URL Analysis**: Automatically extracts the chapter list from a novel's index page.
+- **Smart Download**: Downloads the clean content of each chapter, removing unnecessary ads and scripts.
+- **ePub Conversion**: Compiles all downloaded chapters into a single ePub file ready for reading.
+- **Simple Interface**: Easy to use thanks to the intuitive user interface.
 
-## Compatibilità
+## Compatibility
 
 > [!IMPORTANT]
-> **Ottimizzato per Novelfull.net**: L'applicazione è stata sviluppata e testata principalmente per funzionare con il sito **Novelfull.net** (e siti con struttura simile).
+> **Optimized for Novelfull.net**: The application was developed and tested primarily to work with the **Novelfull.net** website (and sites with similar structures).
 >
-> ⚠️ **Nota per altri siti**: Sebbene l'app tenti di adattarsi a diverse strutture HTML, il funzionamento su siti diversi da Novelfull **non è garantito** e potrebbe richiedere adattamenti specifici.
+> ⚠️ **Note for other sites**: Although the app attempts to adapt to different HTML structures, operation on sites other than Novelfull is **not guaranteed** and may require specific adaptations.
 
-## Installazione
+## Installation
 
-1. Assicurati di avere Python installato.
-2. Clona questo repository o scarica i file.
-3. Installa le dipendenze necessarie:
+1. Ensure you have Python installed.
+2. Clone this repository or download the files.
+3. Install the necessary dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Utilizzo
+## Usage
 
-1. Avvia l'applicazione:
+1. Start the application:
 
 ```bash
 streamlit run app.py
 ```
 
-2. Inserisci l'URL della pagina indice della novel (es. `https://novelfull.com/nome-novel.html`).
-3. Clicca su **Analizza** per trovare i capitoli.
-4. Una volta trovati i capitoli, clicca su **Scarica e Converti in ePub**.
-5. Attendi il completamento del processo (una barra di avanzamento mostrerà il progresso).
-6. Scarica il file ePub generato.
+2. Enter the URL of the novel's index page (e.g., `https://novelfull.com/novel-name.html`).
+3. Click on **Analyze** to find the chapters.
+4. Once the chapters are found, click on **Download and Convert to ePub**.
+5. Wait for the process to complete (a progress bar will show the progress).
+6. Download the generated ePub file.
 
-## Tecnologie
+## Technologies
 
-- **Streamlit**: Per l'interfaccia web.
-- **Requests & BeautifulSoup**: Per il web scraping.
-- **EbookLib**: Per la creazione dei file ePub.
+- **Streamlit**: For the web interface.
+- **Requests & BeautifulSoup**: For web scraping.
+- **EbookLib**: For creating ePub files.

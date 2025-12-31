@@ -29,7 +29,7 @@ def get_chapters(url, status_callback=None):
     
     # 1. Fetch First Page
     if status_callback:
-        status_callback("Fetching first page...")
+        status_callback("Analyzing page 1")
         
     try:
         response = session.get(url, headers=headers)
@@ -136,7 +136,7 @@ def get_chapters(url, status_callback=None):
         
         for p in range(2, last_page + 1):
              if status_callback:
-                status_callback(f"Analyzing page {p}/{last_page}...")
+                status_callback(f"Analyzing page {p}/{last_page}")
              
              # Construct URL
              # If query params exist, append or replace page
@@ -305,8 +305,8 @@ def create_epub(title, chapters_data, progress_bar):
 st.title("📚 Web Novel Downloader")
 st.markdown("Enter the index page URL of a web novel to analyze its chapters.")
 
-url_input = st.text_input("Novel URL", placeholder="Inserisci il link qui")
-analyze_button = st.button("Analizza")
+url_input = st.text_input("Novel URL", placeholder="Enter link here")
+analyze_button = st.button("Analyze", type="primary")
 
 if "chapters" not in st.session_state:
     st.session_state["chapters"] = []
@@ -326,7 +326,7 @@ if analyze_button and url_input:
         st.session_state["chapters"] = chapters_data
         st.session_state["novel_title"] = title
         status_text.empty() # Clear status
-        st.success(f"Found {len(chapters_data)} chapters for '{title}'!")
+
     else:
         status_text.empty()
         st.warning("No chapters found. Please check the URL or the site structure.")
@@ -390,9 +390,9 @@ if st.session_state["chapters"]:
              
         auto_filename = f"{title}{range_str}"
 
-    st.info(f"Ready to download {count_to_download} chapters.")
 
-    if st.button("Scarica e Converti in ePub" if valid_range else "Invalid Range", disabled=not valid_range):
+
+    if st.button("Download and Convert to ePub" if valid_range else "Invalid Range", disabled=not valid_range, type="primary"):
         progress_bar = st.progress(0, text="Starting download...")
         
         try:
