@@ -26,6 +26,7 @@ def get_chapters(url, status_callback=None):
     session = get_session()
     all_chapters = []
     novel_title = "Web Novel"
+    novel_author = "Unknown"
     
     # 1. Fetch First Page
     if status_callback:
@@ -55,6 +56,50 @@ def get_chapters(url, status_callback=None):
 
     if novel_title == "Web Novel" and soup.title:
          novel_title = soup.title.get_text(strip=True).split('|')[0].strip()
+
+    # Extract Author
+    try:
+        author_found = False
+        
+        # Method 1: Search by string text 'Author:' or 'Writer:'
+        # This returns the NavigableString "Author:" even if inside an <h3>
+        author_labels = soup.find_all(string=re.compile(r'(Author|Writer)\s*:', re.IGNORECASE))
+        
+        for label in author_labels:
+            parent = label.parent
+            # Case A: The name is in the same element (e.g. <li>Author: Name</li>)
+            full_text = parent.get_text(strip=True)
+            cleaned = re.sub(r'^(Author|Writer)\s*:\s*', '', full_text, flags=re.IGNORECASE).strip()
+            
+            if cleaned and len(cleaned) > 1:
+                novel_author = cleaned
+                author_found = True
+                break
+            
+            # Case B: The name is in the next sibling (e.g. <h3>Author:</h3> <a...>Name</a>)
+            # Traverse siblings until we find text
+            next_node = parent.next_sibling
+            while next_node:
+                if isinstance(next_node, str):
+                    text = next_node.strip()
+                    if text:
+                        novel_author = text
+                        author_found = True
+                        break
+                elif hasattr(next_node, 'get_text'):
+                    # It's a tag
+                    text = next_node.get_text(strip=True)
+                    if text:
+                        novel_author = text
+                        author_found = True
+                        break
+                next_node = next_node.next_sibling
+            
+            if author_found:
+                break
+
+    except Exception as e:
+        print(f"Error extraction author: {e}")
 
     # Extract Cover Image
     cover_url = ""
@@ -180,7 +225,7 @@ def get_chapters(url, status_callback=None):
                  print(f"Error on page {p}: {e}")
                  # Continue to next page
 
-    return all_chapters, novel_title, cover_url
+    return all_chapters, novel_title, cover_url, novel_author
 
 def download_chapter_content(url, chapter_title=None):
     """
@@ -266,13 +311,13 @@ def download_chapter_content(url, chapter_title=None):
     
     return "<p>Content not found</p>"
 
-def create_epub(title, chapters_data, progress_bar, cover_url=None):
+def create_epub(title, author, chapters_data, progress_bar, cover_url=None):
     book = epub.EpubBook()
     book.set_identifier(f'id_{int(time.time())}')
     book.set_title(title)
     book.set_language('en')
     
-    book.add_author('Unknown') # Could extract author if needed
+    book.add_author(author)
     
     # Add Cover if available
     if cover_url:
@@ -342,6 +387,8 @@ if "novel_title" not in st.session_state:
     st.session_state["novel_title"] = ""
 if "cover_url" not in st.session_state:
     st.session_state["cover_url"] = ""
+if "novel_author" not in st.session_state:
+    st.session_state["novel_author"] = "Unknown"
 
 if analyze_button and url_input:
     # Use a container for status updates
@@ -350,12 +397,13 @@ if analyze_button and url_input:
     def update_status(msg):
         status_text.text(msg)
         
-    chapters_data, title, cover_url = get_chapters(url_input, status_callback=update_status)
+    chapters_data, title, cover_url, author = get_chapters(url_input, status_callback=update_status)
         
     if chapters_data:
         st.session_state["chapters"] = chapters_data
         st.session_state["novel_title"] = title
         st.session_state["cover_url"] = cover_url
+        st.session_state["novel_author"] = author
         status_text.empty() # Clear status
 
     else:
@@ -365,9 +413,12 @@ if analyze_button and url_input:
 if st.session_state["chapters"]:
     chapters_data = st.session_state["chapters"]
     title = st.session_state["novel_title"]
+    author = st.session_state["novel_author"]
     
     st.divider()
-    st.subheader("Selection & Download")
+    st.subheader(f"{title}")
+    st.caption(f"Author: {author}")
+    st.markdown("### Selection & Download")
     
     total_found = len(chapters_data)
     st.write(f"Total chapters found: **{total_found}**")
@@ -428,7 +479,8 @@ if st.session_state["chapters"]:
         
         try:
             cover_url = st.session_state.get("cover_url", None)
-            epub_buffer = create_epub(auto_filename, selected_chapters, progress_bar, cover_url)
+            author = st.session_state.get("novel_author", "Unknown")
+            epub_buffer = create_epub(auto_filename, author, selected_chapters, progress_bar, cover_url)
             progress_bar.empty()
             st.success("Conversion complete!")
             
