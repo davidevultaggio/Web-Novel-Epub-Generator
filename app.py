@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-import pandas as pd
+
 import time
 import random
 from io import BytesIO
@@ -251,13 +251,7 @@ if analyze_button and url_input:
 if st.session_state["chapters"]:
     chapters_data = st.session_state["chapters"]
     title = st.session_state["novel_title"]
-    
-    st.write(f"Total Chapters: {len(chapters_data)}")
-    
-    df = pd.DataFrame(chapters_data)
-    df.index = df.index + 1
-    st.dataframe(df)
-    
+
     # Logic to determine start and end chapters for the filename
     start_chapter = 1
     end_chapter = len(chapters_data)
