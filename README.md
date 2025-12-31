@@ -36,9 +36,10 @@ streamlit run app.py
 
 2. Enter the URL of the novel's index page (e.g., `https://novelfull.com/novel-name.html`).
 3. Click on **Analyze** to find the chapters.
-4. Once the chapters are found, click on **Download and Convert to ePub**.
-5. Wait for the process to complete (a progress bar will show the progress).
-6. Download the generated ePub file.
+4. **Optional**: Select the range of chapters you want to download (Start Chapter - End Chapter).
+5. Click on **Download and Convert to ePub**.
+6. Wait for the process to complete (a progress bar will show the progress).
+7. Download the generated ePub file.
 
 ## Technologies
 
